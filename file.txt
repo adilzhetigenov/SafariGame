@@ -1,0 +1,423 @@
+package Controller;
+
+import View.MapAssets.Tile;
+import View.Scenes.MapPanel;
+import java.awt.Graphics2D;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import javax.imageio.ImageIO;
+import java.awt.Point;
+//THIS CONTROLLERS IS IN CHARGE OF THE MAP AND THE CAMERA OF THE GAME
+
+public class MapController {
+    private MapPanel map;
+    private Tile[] tiles;
+    private int mapTileNum[][];
+    private String mapPath;
+    private double cameraX;
+    private double cameraY;
+    private final int cameraWidth = 44;
+    private final int cameraHeight = 22;
+
+    public MapController(MapPanel map, String mapPath) {
+        this.map = map;
+        this.mapPath = mapPath;
+        tiles = new Tile[6];
+        mapTileNum = new int[map.getMaxWorldColumns()][map.getMaxWorldRows()];
+        // Center the camera
+        int worldWidth = map.getMaxWorldColumns() * map.getTitleSize();
+        int worldHeight = map.getMaxWorldRows() * map.getTitleSize();
+        int screenWidth = map.getTitleSize() * cameraWidth;
+        int screenHeight = map.getTitleSize() * cameraHeight;
+        // Set camera in the center of the map
+        cameraX = (worldWidth - screenWidth) / 2;
+        cameraY = (worldHeight - screenHeight) / 2;
+        GetTileImage();
+        loadMap();
+    }
+
+    public void GetTileImage() {
+        try {
+            // SAND TILE
+            tiles[0] = new Tile();
+            tiles[0].setImage(ImageIO.read(getClass().getResourceAsStream("/View/Assets/sand.png")));
+
+            // WATER TILE
+            tiles[1] = new Tile();
+            tiles[1].setImage(ImageIO.read(getClass().getResourceAsStream("/View/Assets/water.png")));
+            tiles[1].setCollision(true);
+
+            // TREE TILE
+            tiles[2] = new Tile();
+            tiles[2].setImage(ImageIO.read(getClass().getResourceAsStream("/View/Assets/tree.png")));
+            tiles[2].setCollision(true); // Assuming tree is solid
+
+            // BUSH TILE
+            tiles[3] = new Tile();
+            tiles[3].setImage(ImageIO.read(getClass().getResourceAsStream("/View/Assets/bush.png")));
+            tiles[3].setCollision(true); // Assuming bush is not passable
+
+            // FENCE TILE
+            tiles[4] = new Tile();
+            tiles[4].setImage(ImageIO.read(getClass().getResourceAsStream("/View/Assets/fence.png")));
+            tiles[4].setCollision(true); // Assuming fence is solid
+
+            // ROAD TILE
+            tiles[5] = new Tile();
+            tiles[5].setImage(ImageIO.read(getClass().getResourceAsStream("/View/Assets/road.png")));
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void loadMap() {
+        try {
+            InputStream is = getClass().getResourceAsStream(mapPath);
+            BufferedReader br = new BufferedReader(new InputStreamReader(is));
+
+            int col = 0;
+            int row = 0;
+            String line;
+            while ((line = br.readLine()) != null && row < map.getMaxWorldRows()) {
+                while (col < map.getMaxWorldColumns()) {
+                    String numbers[] = line.split(" ");
+                    int num = Integer.parseInt(numbers[col]);
+                    mapTileNum[col][row] = num;
+                    col++;
+                }
+                if (col == map.getMaxWorldColumns()) {
+                    col = 0;
+                    row++;
+                }
+            }
+            br.close();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    public void updateCamera(double deltaX, double deltaY) {
+        cameraX += deltaX;
+        cameraY += deltaY;
+
+        int maxWorldX = map.getMaxWorldColumns() * map.getTitleSize();
+        int maxWorldY = map.getMaxWorldRows() * map.getTitleSize();
+        int screenWidth = map.getTitleSize() * cameraWidth;
+        int screenHeight = map.getTitleSize() * cameraHeight;
+
+        cameraX = Math.max(0, Math.min(cameraX, maxWorldX - screenWidth));
+        cameraY = Math.max(0, Math.min(cameraY, maxWorldY - screenHeight));
+    }
+
+    public void draw(Graphics2D g2) {
+        int maxScreenCol = cameraWidth;
+        int maxScreenRow = cameraHeight;
+
+        int startCol = (int) (cameraX / map.getTitleSize());
+        int startRow = (int) (cameraY / map.getTitleSize());
+
+        int cameraOffsetX = (int) (cameraX % map.getTitleSize());
+        int cameraOffsetY = (int) (cameraY % map.getTitleSize());
+
+        for (int screenRow = 0; screenRow <= maxScreenRow; screenRow++) {
+            for (int screenCol = 0; screenCol <= maxScreenCol; screenCol++) {
+                int worldCol = startCol + screenCol;
+                int worldRow = startRow + screenRow;
+
+                // Check if the tile is within world bounds for sake
+                // of not loading all of tiles of the map
+                if (worldCol < map.getMaxWorldColumns() && worldRow < map.getMaxWorldRows() &&
+                        worldCol >= 0 && worldRow >= 0) {
+                    int tileNum = mapTileNum[worldCol][worldRow];
+                    int screenX = screenCol * map.getTitleSize() - cameraOffsetX;
+                    int screenY = screenRow * map.getTitleSize() - cameraOffsetY;
+
+                    if (screenX + map.getTitleSize() >= 0 && screenX < map.getTitleSize() * maxScreenCol &&
+                            screenY + map.getTitleSize() >= 0 && screenY < map.getTitleSize() * maxScreenRow) {
+                        g2.drawImage(tiles[tileNum].getImage(), screenX, screenY, map.getTitleSize(),
+                                map.getTitleSize(),
+                                null);
+                    }
+                }
+            }
+        }
+    }
+// for the shop
+    public Point screenToWorldCoordinates(int screenX, int screenY) {
+        // This is a simplified implementation - adjust based on your camera system
+        double worldX = screenX + cameraX;
+        double worldY = screenY + cameraY;
+        
+        return new Point((int)worldX, (int)worldY);
+    }
+
+    public boolean canMoveCamera(double deltaX, double deltaY) {
+        double newCameraX = cameraX + deltaX;
+        double newCameraY = cameraY + deltaY;
+
+        int maxWorldX = map.getMaxWorldColumns() * map.getTitleSize();
+        int maxWorldY = map.getMaxWorldRows() * map.getTitleSize();
+        int screenWidth = map.getTitleSize() * cameraWidth;
+        int screenHeight = map.getTitleSize() * cameraHeight;
+
+        if (deltaX < 0) {
+            return newCameraX >= 0;
+        } else if (deltaX > 0) {
+            return newCameraX <= maxWorldX - screenWidth;
+        } else if (deltaY < 0) {
+            return newCameraY >= 0;
+        } else if (deltaY > 0) {
+            return newCameraY <= maxWorldY - screenHeight;
+        }
+
+        return true;
+    }
+
+    public void changeMap(String newPath) {
+        mapPath = newPath;
+    }
+
+    public int getMapTile(int x, int y) {
+        return mapTileNum[x][y];
+    }
+
+    public Tile[] getTilesType() {
+        return tiles;
+    }
+
+    public double getCameraX() {
+        return cameraX;
+    }
+
+    public double getCameraY() {
+        return cameraY;
+    }
+}
+package View.MapAssets;
+
+import java.awt.image.BufferedImage;
+
+public class Tile {
+    private BufferedImage image;
+    private boolean collision = false;
+
+
+    public BufferedImage getImage() {
+        return image;
+    }
+
+    public void setImage(BufferedImage image) {
+        this.image = image;
+    }
+
+    public boolean isCollision() {
+        return collision;
+    }
+
+    public void setCollision(boolean collision) {
+        this.collision = collision;
+    }
+
+
+
+}
+package Controller;
+
+import javax.swing.*;
+
+import View.Components.ShopItemPanel;
+import View.Components.ShopPanel;
+
+import java.awt.*;
+import java.awt.event.*;
+
+/**
+ * Controller class that handles the business logic and user interactions
+ * for shop items. Manages drag-and-drop and purchase operations.
+ */
+public class ShopItemController {
+    private ShopItemPanel view;
+    private ShopPanel parentShop;
+    
+    // Drag-and-drop related fields
+    private JLabel ghostImage;
+    private JPanel messagePanel;
+    private Point dragOrigin;
+    
+    /**
+     * Creates a new controller for the shop item.
+     * 
+     * @param view The view component this controller manages
+     * @param parentShop Reference to the parent shop panel
+     */
+    public ShopItemController(ShopItemPanel view, ShopPanel parentShop) {
+        this.view = view;
+        this.parentShop = parentShop;
+    }
+    
+    /**
+     * Sets up the drag-and-drop functionality for the shop item.
+     */
+    public void setupDragAndDrop() {
+        view.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (hasEnoughFunds()) {
+                    dragOrigin = e.getPoint();
+                    
+                    // Initialize components on demand only when the panel is in a window
+                    if (SwingUtilities.getWindowAncestor(view) != null) {
+                        JLayeredPane layeredPane = SwingUtilities.getRootPane(view).getLayeredPane();
+                        
+                        // Create ghost image if it doesn't exist
+                        if (ghostImage == null) {
+                            ghostImage = view.getGhostImage(true);
+                        }
+                        
+                        // Create message panel if it doesn't exist
+                        if (messagePanel == null) {
+                            messagePanel = view.getMessagePanel(true);
+                        }
+                        
+                        // Add components to layered pane
+                        layeredPane.add(ghostImage, JLayeredPane.DRAG_LAYER);
+                        layeredPane.add(messagePanel, JLayeredPane.POPUP_LAYER);
+                        
+                        // Position message panel at the top center of the screen
+                        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+                        messagePanel.setSize(messagePanel.getPreferredSize());
+                        messagePanel.setLocation((screenSize.width - messagePanel.getWidth()) / 2, 50);
+                        
+                        // Hide shop panel and show message
+                        parentShop.setVisible(false);
+                        messagePanel.setVisible(true);
+                        
+                        // Update ghost image position to be centered on cursor
+                        Point screenPoint = MouseInfo.getPointerInfo().getLocation();
+                        ghostImage.setLocation(
+                            screenPoint.x - ghostImage.getWidth() / 2,
+                            screenPoint.y - ghostImage.getHeight() / 2
+                        );
+                        ghostImage.setVisible(true);
+                    }
+                }
+            }
+            
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (dragOrigin != null) {
+                    JLayeredPane layeredPane = null;
+                    if (SwingUtilities.getWindowAncestor(view) != null) {
+                        layeredPane = SwingUtilities.getRootPane(view).getLayeredPane();
+                    }
+                    
+                    try {
+                        // Get current cursor position in screen coordinates
+                        Point screenPoint = MouseInfo.getPointerInfo().getLocation();
+                        Point mapPoint = parentShop.getMapPanel().getLocationOnScreen();
+                        
+                        // Calculate position relative to map
+                        int x = (int) (screenPoint.getX() - mapPoint.getX());
+                        int y = (int) (screenPoint.getY() - mapPoint.getY());
+                        
+                        // Check if the drop location is within the map
+                        if (isDropLocationValid(x, y)) {
+                            // Convert screen coordinates to world coordinates
+                            Point worldCoords = parentShop.getMapPanel().getMapController()
+                                .screenToWorldCoordinates(x, y);
+                            
+                            // Attempt to purchase and place the item
+                            if (hasEnoughFunds()) {
+                                completePurchase();
+                                
+                                // Add the item to the map at the dropped location
+                                parentShop.addItemToMap(view.getName(), worldCoords);
+                            }
+                        }
+                    } catch (Exception ex) {
+                        System.err.println("Error during drag and drop: " + ex.getMessage());
+                    }
+                    
+                    // Clean up if components were created
+                    if (layeredPane != null) {
+                        if (ghostImage != null) {
+                            ghostImage.setVisible(false);
+                            layeredPane.remove(ghostImage);
+                        }
+                        if (messagePanel != null) {
+                            messagePanel.setVisible(false);
+                            layeredPane.remove(messagePanel);
+                        }
+                        layeredPane.repaint();
+                    }
+                    
+                    parentShop.setVisible(true);
+                    dragOrigin = null;
+                }
+            }
+        });
+        
+        view.addMouseMotionListener(new MouseMotionAdapter() {
+            @Override
+            public void mouseDragged(MouseEvent e) {
+                if (dragOrigin != null && ghostImage != null && ghostImage.isVisible()) {
+                    // Get current cursor position in screen coordinates
+                    Point screenPoint = MouseInfo.getPointerInfo().getLocation();
+                    
+                    // Update ghost image position to follow the cursor (centered on cursor)
+                    ghostImage.setLocation(
+                        screenPoint.x - ghostImage.getWidth() / 2,
+                        screenPoint.y - ghostImage.getHeight() / 2
+                    );
+                }
+            }
+        });
+    }
+    
+    /**
+     * Checks if the drop location is within the map boundaries.
+     */
+    private boolean isDropLocationValid(int x, int y) {
+        return x >= 0 && x < parentShop.getMapPanel().getWidth() && 
+               y >= 0 && y < parentShop.getMapPanel().getHeight() ;
+    }
+    
+    /**
+     * Handles the purchase action when the buy button is clicked.
+     */
+    public void purchase() {
+        if (hasEnoughFunds()) {
+            completePurchase();
+            
+            // Add item to the map at a random valid location
+            parentShop.addItemToMap(view.getName(), parentShop.getRandomValidLocation());
+            
+            JOptionPane.showMessageDialog(view, 
+                view.getName() + " purchased successfully!", 
+                "Purchase Successful", 
+                JOptionPane.INFORMATION_MESSAGE);
+        } else {
+            JOptionPane.showMessageDialog(view, 
+                "Not enough funds to purchase " + view.getName() + ".", 
+                "Insufficient Funds", 
+                JOptionPane.WARNING_MESSAGE);
+        }
+    }
+    
+    /**
+     * Checks if the player has enough funds to purchase the item.
+     */
+    private boolean hasEnoughFunds() {
+        return parentShop.getGameManager().getCurrentCapital() >= view.getPrice();
+    }
+    
+    /**
+     * Completes the purchase transaction by decreasing player's capital.
+     */
+    private void completePurchase() {
+        parentShop.getGameManager().decreaseCapital(view.getPrice());
+        parentShop.updateBalanceDisplay();
+    }
+}
